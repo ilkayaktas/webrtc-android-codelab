@@ -7,7 +7,6 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
@@ -19,8 +18,6 @@ import android.widget.Toast;
 
 import com.ilkayaktas.webrtcandroiddemo.handlers.CustomPeerConnectionObserver;
 import com.ilkayaktas.webrtcandroiddemo.handlers.CustomSdpObserver;
-import com.ilkayaktas.webrtcandroiddemo.ice.IceServer;
-import com.ilkayaktas.webrtcandroiddemo.ice.TurnServerPojo;
 import com.ilkayaktas.webrtcandroiddemo.signaling.SignallingClient;
 import com.ilkayaktas.webrtcandroiddemo.signaling.SignallingFacade;
 import org.webrtc.AudioSource;
@@ -43,13 +40,8 @@ import org.webrtc.VideoCapturer;
 import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
 
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
-
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
 
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
@@ -68,7 +60,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     Button hangup;
     public PeerConnection localPeer;
-    List<IceServer> iceServers;
     EglBase rootEglBase;
 
     public boolean gotUserMedia;
@@ -118,49 +109,31 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void initVideos() {
+        // Android uses the EGL library. GLES calls render textured polygons, while EGL calls put renderings on screens.
+        // This is related with OpenGL
         rootEglBase = EglBase.create();
+
+        // Init with EglBase to have high performance OpenGL drawings
         localVideoView.init(rootEglBase.getEglBaseContext(), null);
         remoteVideoView.init(rootEglBase.getEglBaseContext(), null);
+
+        // Set Z Order
         localVideoView.setZOrderMediaOverlay(true);
         remoteVideoView.setZOrderMediaOverlay(true);
     }
 
     private void getIceServers() {
-        //get Ice servers using xirsys
-        byte[] data = new byte[0];
-        try {
-            data = ("<xirsys_ident>:<xirsys_secret>").getBytes("UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
-        }
-        String authToken = "Basic " + Base64.encodeToString(data, Base64.NO_WRAP);
-        Utils.getInstance().getRetrofitInstance().getIceCandidates(authToken).enqueue(new Callback<TurnServerPojo>() {
-            @Override
-            public void onResponse(@NonNull Call<TurnServerPojo> call, @NonNull Response<TurnServerPojo> response) {
-                TurnServerPojo body = response.body();
-                if (body != null) {
-                    iceServers = body.iceServerList.iceServers;
-                }
-                for (IceServer iceServer : iceServers) {
-                    if (iceServer.credential == null) {
-                        PeerConnection.IceServer peerIceServer = PeerConnection.IceServer.builder(iceServer.url).createIceServer();
-                        peerIceServers.add(peerIceServer);
-                    } else {
-                        PeerConnection.IceServer peerIceServer = PeerConnection.IceServer.builder(iceServer.url)
-                                .setUsername(iceServer.username)
-                                .setPassword(iceServer.credential)
-                                .createIceServer();
-                        peerIceServers.add(peerIceServer);
-                    }
-                }
-                Log.d("onApiResponse", "IceServers\n" + iceServers.toString());
-            }
+        PeerConnection.IceServer peerIceServer = PeerConnection.IceServer.builder("stun.l.google.com:19302").createIceServer();
+        PeerConnection.IceServer peerIceServer1 = PeerConnection.IceServer.builder("stun1.l.google.com:19302").createIceServer();
+        PeerConnection.IceServer peerIceServer2 = PeerConnection.IceServer.builder("stun2.l.google.com:19302").createIceServer();
+        PeerConnection.IceServer peerIceServer3 = PeerConnection.IceServer.builder("stun3.l.google.com:19302").createIceServer();
+        PeerConnection.IceServer peerIceServer4 = PeerConnection.IceServer.builder("stun4.l.google.com:19302").createIceServer();
 
-            @Override
-            public void onFailure(@NonNull Call<TurnServerPojo> call, @NonNull Throwable t) {
-                t.printStackTrace();
-            }
-        });
+        peerIceServers.add(peerIceServer);
+        peerIceServers.add(peerIceServer1);
+        peerIceServers.add(peerIceServer2);
+        peerIceServers.add(peerIceServer3);
+        peerIceServers.add(peerIceServer4);
     }
 
     public void start() {
