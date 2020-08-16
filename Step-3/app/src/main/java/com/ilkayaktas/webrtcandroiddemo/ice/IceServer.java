@@ -1,5 +1,5 @@
 
-package xyz.vivekc.webrtccodelab;
+package com.ilkayaktas.webrtcandroiddemo.ice;
 
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;

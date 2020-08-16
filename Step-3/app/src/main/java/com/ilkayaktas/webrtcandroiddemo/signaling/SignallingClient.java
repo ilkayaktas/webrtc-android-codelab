@@ -1,4 +1,4 @@
-package xyz.vivekc.webrtccodelab;
+package com.ilkayaktas.webrtcandroiddemo.signaling;
 
 import android.annotation.SuppressLint;
 import android.util.Log;
@@ -21,17 +21,12 @@ import javax.net.ssl.X509TrustManager;
 import io.socket.client.IO;
 import io.socket.client.Socket;
 
-/**
- * Webrtc_Step3
- * Created by vivek-3102 on 11/03/17.
- */
-
-class SignallingClient {
+public class SignallingClient {
     private static SignallingClient instance;
     private String roomName = null;
     private Socket socket;
     boolean isChannelReady = false;
-    boolean isInitiator = false;
+    public boolean isInitiator = false;
     boolean isStarted = false;
     private SignalingInterface callback;
 
@@ -71,7 +66,7 @@ class SignallingClient {
             IO.setDefaultHostnameVerifier((hostname, session) -> true);
             IO.setDefaultSSLContext(sslcontext);
             //set the socket.io url here
-            socket = IO.socket("http://192.168.178.207:1794");
+            socket = IO.socket("http://192.168.1.112:1794");
             socket.connect();
             Log.d("SignallingClient", "init() called");
 

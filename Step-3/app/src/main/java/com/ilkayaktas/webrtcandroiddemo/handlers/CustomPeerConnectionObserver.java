@@ -1,4 +1,4 @@
-package xyz.vivekc.webrtccodelab;
+package com.ilkayaktas.webrtcandroiddemo.handlers;
 
 import android.util.Log;
 
@@ -8,16 +8,11 @@ import org.webrtc.MediaStream;
 import org.webrtc.PeerConnection;
 import org.webrtc.RtpReceiver;
 
-/**
- * Webrtc_Step2
- * Created by vivek-3102 on 11/03/17.
- */
-
-class CustomPeerConnectionObserver implements PeerConnection.Observer {
+public class CustomPeerConnectionObserver implements PeerConnection.Observer {
 
     private String logTag;
 
-    CustomPeerConnectionObserver(String logTag) {
+    public CustomPeerConnectionObserver(String logTag) {
         this.logTag = this.getClass().getCanonicalName();
         this.logTag = this.logTag+" "+logTag;
     }

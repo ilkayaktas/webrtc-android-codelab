@@ -1,4 +1,4 @@
-package xyz.vivekc.webrtccodelab;
+package com.ilkayaktas.webrtcandroiddemo;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;

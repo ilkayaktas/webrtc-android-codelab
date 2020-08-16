@@ -1,5 +1,5 @@
 
-package xyz.vivekc.webrtccodelab;
+package com.ilkayaktas.webrtcandroiddemo.ice;
 
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
@@ -21,7 +21,7 @@ public class TurnServerPojo {
     @Expose
     public IceServerList iceServerList;
 
-    class IceServerList {
+    public class IceServerList {
 
         @SerializedName("iceServers")
         @Expose

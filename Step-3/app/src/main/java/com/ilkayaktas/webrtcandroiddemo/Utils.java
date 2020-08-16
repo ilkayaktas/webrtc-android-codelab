@@ -1,12 +1,8 @@
-package xyz.vivekc.webrtccodelab;
+package com.ilkayaktas.webrtcandroiddemo;
 
+import com.ilkayaktas.webrtcandroiddemo.ice.TurnServer;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
-
-/**
- * Webrtc_Step3
- * Created by vivek-3102 on 11/03/17.
- */
 
 public class Utils {
 

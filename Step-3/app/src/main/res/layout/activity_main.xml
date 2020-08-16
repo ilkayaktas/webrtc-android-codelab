@@ -12,7 +12,7 @@
         android:layout_height="match_parent"
         android:layout_weight="1"
         android:orientation="vertical"
-        tools:context="xyz.vivekc.webrtccodelab.MainActivity">
+        tools:context="com.ilkayaktas.webrtcandroiddemo.MainActivity">
 
 
         <org.webrtc.SurfaceViewRenderer
