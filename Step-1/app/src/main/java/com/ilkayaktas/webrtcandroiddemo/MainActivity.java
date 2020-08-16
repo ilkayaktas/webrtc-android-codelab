@@ -1,24 +1,10 @@
-package xyz.vivekc.webrtccodelab;
+package com.ilkayaktas.webrtcandroiddemo;
 
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 
-import org.webrtc.AudioSource;
-import org.webrtc.AudioTrack;
-import org.webrtc.Camera1Enumerator;
-import org.webrtc.CameraEnumerator;
-import org.webrtc.EglBase;
-import org.webrtc.Logging;
-import org.webrtc.MediaConstraints;
-import org.webrtc.PeerConnectionFactory;
-import org.webrtc.SurfaceViewRenderer;
-import org.webrtc.VideoCapturer;
+import org.webrtc.*;
 import org.webrtc.VideoRenderer;
-import org.webrtc.VideoSource;
-import org.webrtc.VideoTrack;
-import xyz.vivekc.webrtccodelab.R;
-
-import java.util.Arrays;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";

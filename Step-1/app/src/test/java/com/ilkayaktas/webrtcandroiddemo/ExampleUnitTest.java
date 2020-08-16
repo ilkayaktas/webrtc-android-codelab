@@ -1,4 +1,4 @@
-package xyz.vivekc.webrtccodelab;
+package com.ilkayaktas.webrtcandroiddemo;
 
 import org.junit.Test;
 

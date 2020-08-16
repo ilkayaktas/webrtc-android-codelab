@@ -1,12 +1,12 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 24
-    buildToolsVersion '25.0.0'
+    compileSdkVersion 27
+    buildToolsVersion '27.0.3'
     defaultConfig {
-        applicationId "xyz.vivekc.webrtccodelab"
+        applicationId "com.ilkayaktas.webrtcandroiddemo"
         minSdkVersion 21
-        targetSdkVersion 22
+        targetSdkVersion 27
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
@@ -21,18 +21,19 @@ android {
         jni.srcDirs = [] // This prevents the auto generation of Android.mk
         jniLibs.srcDir 'libs/jniLibs' // This is not necessary unless you have precompiled libraries in your project.
     }
+    compileOptions {
+        targetCompatibility 1.8
+        sourceCompatibility 1.8
+    }
 }
 
 dependencies {
-//    compile fileTree(include: ['*.jar'], dir: 'libs')
     androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
         exclude group: 'com.android.support', module: 'support-annotations'
     })
-    compile 'com.android.support:appcompat-v7:24.2.1'
-    testCompile 'junit:junit:4.12'
-//    compile files('libs/libjingle_peerconnection_java-13886.jar')
-//    compile project(':libwebrtc')
-    compile(name:'libwebrtc', ext:'aar')
+    compile 'com.android.support:appcompat-v7:27.1.1'
+    testCompile 'junit:junit:4.13'
+    implementation 'org.webrtc:google-webrtc:1.0.30039'
 }
 
 repositories {
