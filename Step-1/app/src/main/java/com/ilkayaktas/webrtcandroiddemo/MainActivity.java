@@ -65,6 +65,13 @@ public class MainActivity extends AppCompatActivity {
     private VideoCapturer createVideoCapturer() {
         VideoCapturer videoCapturer;
         Logging.d(TAG, "Creating capturer using camera1 API.");
+
+        /*if (Camera2Enumerator.isSupported(this)){
+            videoCapturer = createCameraCapturer(new Camera2Enumerator(this), customCameraEventsHandler);
+        } else{
+            videoCapturer = createCameraCapturer(new Camera1Enumerator(false) , customCameraEventsHandler);
+        }*/
+
         videoCapturer = createCameraCapturer(new Camera1Enumerator(false));
 
         return videoCapturer;
