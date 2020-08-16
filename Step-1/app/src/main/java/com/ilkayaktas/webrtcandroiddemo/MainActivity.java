@@ -14,6 +14,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        start();
+    }
+
+    public void start(){
         //Initialize PeerConnectionFactory globals.
         //Params are context, initAudio,initVideo and videoCodecHwAcceleration
         //PeerConnectionFactory.initializeAndroidGlobals(this, true, true, true);
