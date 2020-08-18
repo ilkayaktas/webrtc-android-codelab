@@ -4,7 +4,7 @@ android {
     compileSdkVersion 27
     defaultConfig {
         applicationId "com.ilkayaktas.webrtcandroiddemo"
-        minSdkVersion 21
+        minSdkVersion 24
         targetSdkVersion 27
         versionCode 1
         versionName "1.0"
@@ -33,7 +33,7 @@ dependencies {
     })
     implementation 'com.android.support:appcompat-v7:27.1.1'
     testImplementation 'junit:junit:4.13'
-    implementation('io.socket:socket.io-client:0.8.3') {
+    implementation('io.socket:socket.io-client:1.0.0') {
         // excluding org.json which is provided by Android
         exclude group: 'org.json', module: 'json'
     }

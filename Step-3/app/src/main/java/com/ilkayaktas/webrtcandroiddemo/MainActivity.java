@@ -16,6 +16,7 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import com.ilkayaktas.webrtcandroiddemo.handlers.CustomCameraEventsHandler;
 import com.ilkayaktas.webrtcandroiddemo.handlers.CustomPeerConnectionObserver;
 import com.ilkayaktas.webrtcandroiddemo.handlers.CustomSdpObserver;
 import com.ilkayaktas.webrtcandroiddemo.signaling.SignallingClient;
@@ -59,7 +60,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     SurfaceViewRenderer remoteVideoView;
 
     Button hangup;
-    public PeerConnection localPeer;
+    public PeerConnection localPeerConnection;
     EglBase rootEglBase;
 
     public boolean gotUserMedia;
@@ -164,8 +165,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 .createPeerConnectionFactory();
 
         //Now create a VideoCapturer instance.
-        VideoCapturer videoCapturerAndroid;
-        videoCapturerAndroid = createCameraCapturer(new Camera1Enumerator(false));
+        VideoCapturer videoCapturerAndroid = createVideoCapturer(new CustomCameraEventsHandler());
 
         //Create MediaConstraints - Will be useful for specifying video and audio constraints.
         audioConstraints = new MediaConstraints();
@@ -177,6 +177,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             videoSource = peerConnectionFactory.createVideoSource(videoCapturerAndroid.isScreencast());
             videoCapturerAndroid.initialize(surfaceTextureHelper, this, videoSource.getCapturerObserver());
         }
+
+        // We now have a VideoTrack which gives the stream of data from the device’s camera.
         localVideoTrack = peerConnectionFactory.createVideoTrack("100", videoSource);
 
         //create an AudioSource instance
@@ -215,11 +217,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         rtcConfig.continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY;
         // Use ECDSA encryption.
         rtcConfig.keyType = PeerConnection.KeyType.ECDSA;
-        localPeer = peerConnectionFactory.createPeerConnection(rtcConfig, new CustomPeerConnectionObserver("localPeerCreation") {
+        localPeerConnection = peerConnectionFactory.createPeerConnection(rtcConfig, new CustomPeerConnectionObserver("LOCAL PEER CONNECTION OBSERVER") {
             @Override
             public void onIceCandidate(IceCandidate iceCandidate) {
                 super.onIceCandidate(iceCandidate);
-                onIceCandidateReceived(iceCandidate);
+                sendIceCandidateViaSignallingServer(iceCandidate);
             }
 
             @Override
@@ -241,7 +243,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         MediaStream stream = peerConnectionFactory.createLocalMediaStream("102");
         stream.addTrack(localAudioTrack);
         stream.addTrack(localVideoTrack);
-        localPeer.addStream(stream);
+        localPeerConnection.addStream(stream);
     }
 
     /**
@@ -254,11 +256,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 new MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"));
         sdpConstraints.mandatory.add(
                 new MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"));
-        localPeer.createOffer(new CustomSdpObserver("localCreateOffer") {
+        localPeerConnection.createOffer(new CustomSdpObserver("localCreateOffer") {
             @Override
             public void onCreateSuccess(SessionDescription sessionDescription) {
                 super.onCreateSuccess(sessionDescription);
-                localPeer.setLocalDescription(new CustomSdpObserver("localSetLocalDesc"), sessionDescription);
+                localPeerConnection.setLocalDescription(new CustomSdpObserver("CUSTOM SDP OBSERVER"), sessionDescription);
                 Log.d("onCreateSuccess", "SignallingClient emit ");
                 SignallingClient.getInstance().emitMessage(sessionDescription);
             }
@@ -284,17 +286,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     /**
      * Received local ice candidate. Send it to remote peer through signalling for negotiation
      */
-    public void onIceCandidateReceived(IceCandidate iceCandidate) {
+    public void sendIceCandidateViaSignallingServer(IceCandidate iceCandidate) {
         //we have received ice candidate. We can set it to the other peer.
         SignallingClient.getInstance().emitIceCandidate(iceCandidate);
     }
 
     public void doAnswer() {
-        localPeer.createAnswer(new CustomSdpObserver("localCreateAns") {
+        localPeerConnection.createAnswer(new CustomSdpObserver("localCreateAns") {
             @Override
             public void onCreateSuccess(SessionDescription sessionDescription) {
                 super.onCreateSuccess(sessionDescription);
-                localPeer.setLocalDescription(new CustomSdpObserver("localSetLocal"), sessionDescription);
+                localPeerConnection.setLocalDescription(new CustomSdpObserver("localSetLocal"), sessionDescription);
                 SignallingClient.getInstance().emitMessage(sessionDescription);
             }
         }, new MediaConstraints());
@@ -324,15 +326,23 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 hangup();
                 break;
             }
+            case R.id.call:{
+                if (SignallingClient.getInstance().isInitiator) {
+                    doCall();
+                } else{
+                    Log.d(TAG, "Signalling server is not connected.");
+                }
+                break;
+            }
         }
     }
 
     public void hangup() {
         try {
-            if (localPeer != null) {
-                localPeer.close();
+            if (localPeerConnection != null) {
+                localPeerConnection.close();
             }
-            localPeer = null;
+            localPeerConnection = null;
             SignallingClient.getInstance().close();
             updateVideoViews(false);
         } catch (Exception e) {
@@ -363,15 +373,30 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         runOnUiThread(() -> Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show());
     }
 
-    private VideoCapturer createCameraCapturer(CameraEnumerator enumerator) {
+    private VideoCapturer createVideoCapturer(CustomCameraEventsHandler customCameraEventsHandler) {
+        VideoCapturer videoCapturer;
+        Logging.d(TAG, "Creating capturer using camera1 API.");
+
+        /*if (Camera2Enumerator.isSupported(this)){
+            videoCapturer = createCameraCapturer(new Camera2Enumerator(this), customCameraEventsHandler);
+        } else{
+            videoCapturer = createCameraCapturer(new Camera1Enumerator(false) , customCameraEventsHandler);
+        }*/
+        videoCapturer = createCameraCapturer(new Camera1Enumerator(false) /*Don't capture to text*/, customCameraEventsHandler);
+        return videoCapturer;
+    }
+
+    // Create a VideoCapturer instance which uses the camera of the device
+    private VideoCapturer createCameraCapturer(CameraEnumerator enumerator, CustomCameraEventsHandler customCameraEventsHandler) {
         final String[] deviceNames = enumerator.getDeviceNames();
 
         // First, try to find front facing camera
         Logging.d(TAG, "Looking for front facing cameras.");
         for (String deviceName : deviceNames) {
+            Logging.d(TAG, "Device name " + deviceName);
             if (enumerator.isFrontFacing(deviceName)) {
                 Logging.d(TAG, "Creating front facing camera capturer.");
-                VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, null);
+                VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, customCameraEventsHandler);
 
                 if (videoCapturer != null) {
                     return videoCapturer;
@@ -384,7 +409,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         for (String deviceName : deviceNames) {
             if (!enumerator.isFrontFacing(deviceName)) {
                 Logging.d(TAG, "Creating other camera capturer.");
-                VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, null);
+                VideoCapturer videoCapturer = enumerator.createCapturer(deviceName, customCameraEventsHandler);
 
                 if (videoCapturer != null) {
                     return videoCapturer;
@@ -394,4 +419,5 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         return null;
     }
+
 }

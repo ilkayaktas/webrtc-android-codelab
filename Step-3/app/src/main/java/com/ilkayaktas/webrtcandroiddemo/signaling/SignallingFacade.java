@@ -33,7 +33,7 @@ public class SignallingFacade implements SignallingClient.SignalingInterface{
             }
 
             try {
-                activity.localPeer.setRemoteDescription(new CustomSdpObserver("localSetRemote"), new SessionDescription(SessionDescription.Type.OFFER, data.getString("sdp")));
+                activity.localPeerConnection.setRemoteDescription(new CustomSdpObserver("localSetRemote"), new SessionDescription(SessionDescription.Type.OFFER, data.getString("sdp")));
                 activity.doAnswer();
                 activity.updateVideoViews(true);
             } catch (JSONException e) {
@@ -50,7 +50,7 @@ public class SignallingFacade implements SignallingClient.SignalingInterface{
     public void onAnswerReceived(JSONObject data) {
         activity.showToast("Received Answer");
         try {
-            activity.localPeer.setRemoteDescription(new CustomSdpObserver("localSetRemote"), new SessionDescription(SessionDescription.Type.fromCanonicalForm(data.getString("type").toLowerCase()), data.getString("sdp")));
+            activity.localPeerConnection.setRemoteDescription(new CustomSdpObserver("localSetRemote"), new SessionDescription(SessionDescription.Type.fromCanonicalForm(data.getString("type").toLowerCase()), data.getString("sdp")));
             activity.updateVideoViews(true);
         } catch (JSONException e) {
             e.printStackTrace();
@@ -63,7 +63,7 @@ public class SignallingFacade implements SignallingClient.SignalingInterface{
     @Override
     public void onIceCandidateReceived(JSONObject data) {
         try {
-            activity.localPeer.addIceCandidate(new IceCandidate(data.getString("id"), data.getInt("label"), data.getString("candidate")));
+            activity.localPeerConnection.addIceCandidate(new IceCandidate(data.getString("id"), data.getInt("label"), data.getString("candidate")));
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -79,9 +79,9 @@ public class SignallingFacade implements SignallingClient.SignalingInterface{
             if (!SignallingClient.getInstance().isStarted && activity.localVideoTrack != null && SignallingClient.getInstance().isChannelReady) {
                 activity.createPeerConnection();
                 SignallingClient.getInstance().isStarted = true;
-                if (SignallingClient.getInstance().isInitiator) {
-                    activity.doCall();
-                }
+//                if (SignallingClient.getInstance().isInitiator) {
+//                    activity.doCall();
+//                }
             }
         });
     }

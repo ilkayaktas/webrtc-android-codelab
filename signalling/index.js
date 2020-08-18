@@ -1,24 +1,23 @@
-'use strict';
 
-var os = require('os');
-var nodeStatic = require('node-static');
-var https = require('http'); // use require('https') for https
-var socketIO = require('socket.io');
-var fs = require("fs");
-var options = {
-  // for https:
-  //key: fs.readFileSync('key.pem'),
-  //cert: fs.readFileSync('cert.pem')
-};
+const express = require("express");
+const socket = require("socket.io");
 
-var fileServer = new(nodeStatic.Server)();
-var app = https.createServer(options,function(req, res) {
-  fileServer.serve(req, res);
 
-}).listen(1794, "0.0.0.0");
+// App setup
+const PORT = 8080;
+const app = express();
+const server = app.listen(PORT, function () {
+  console.log(`Listening http://localhost:${PORT}`);
+});
 
-var io = socketIO.listen(app);
-io.sockets.on('connection', function(socket) {
+// Static files
+app.use(express.static("public"));
+
+// Socket setup
+const io = socket(server);
+
+io.on('connection', (socket) => {
+  console.log('A user connected');
 
   // convenience function to log server messages on the client
   function log() {

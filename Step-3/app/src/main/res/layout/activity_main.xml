@@ -19,7 +19,6 @@
             android:id="@+id/remote_gl_surface_view"
             android:layout_width="match_parent"
             android:layout_weight="1"
-            android:visibility="gone"
             android:layout_height="match_parent" />
 
         <org.webrtc.SurfaceViewRenderer
@@ -38,10 +37,20 @@
         android:layout_gravity="bottom"
         android:orientation="horizontal">
         <Button
+                android:layout_width="wrap_content"
+                android:layout_margin="5dp"
+                android:layout_height="wrap_content"
+                android:id="@+id/call"
+                android:text="Call"/>
+        <Space
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="1"/>
+        <Button
             android:layout_width="wrap_content"
             android:layout_margin="5dp"
             android:layout_height="wrap_content"
             android:id="@+id/end_call"
-            android:text="Hangup" />
+            android:text="End Call" />
     </LinearLayout>
 </FrameLayout>

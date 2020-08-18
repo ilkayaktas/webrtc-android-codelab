@@ -64,8 +64,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         remoteVideoView.init(rootEglBase.getEglBaseContext(), null);
 
         // Set Z Order
-        localVideoView.setZOrderMediaOverlay(true);
-        remoteVideoView.setZOrderMediaOverlay(true);
+        //localVideoView.setZOrderMediaOverlay(true);
+        //remoteVideoView.setZOrderMediaOverlay(true);
 
         // Set Mirror
         localVideoView.setMirror(true);
