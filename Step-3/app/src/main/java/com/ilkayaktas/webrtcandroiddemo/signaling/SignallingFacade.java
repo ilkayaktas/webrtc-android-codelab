@@ -7,7 +7,7 @@ import org.json.JSONObject;
 import org.webrtc.IceCandidate;
 import org.webrtc.SessionDescription;
 
-public class SignallingFacade implements SignallingClient.SignalingInterface{
+public class SignallingFacade implements SignallingInterface {
 
     private MainActivity activity;
 

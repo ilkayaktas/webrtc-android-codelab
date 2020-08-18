@@ -11,19 +11,19 @@ import java.net.UnknownHostException;
 import java.nio.charset.Charset;
 import java.util.concurrent.ExecutorService;
 
-public class TCPChannelClient {
-  private static final String TAG = "TCPChannelClient";
+public class TCPConnectionClient {
+  private static final String TAG = "TCPConnectionClient";
 
   private final ExecutorService executor;
   private final ThreadUtils.ThreadChecker executorThreadCheck;
-  private final TCPChannelEvents eventListener;
+  private final TCPConnectionEvents eventListener;
   private TCPSocket socket;
 
   /**
    * Callback interface for messages delivered on TCP Connection. All callbacks are invoked from the
    * looper executor thread.
    */
-  public interface TCPChannelEvents {
+  public interface TCPConnectionEvents {
     void onTCPConnected(boolean server);
     void onTCPMessage(String message);
     void onTCPError(String description);
@@ -38,7 +38,7 @@ public class TCPChannelClient {
    * @param ip            IP address to listen on or connect to.
    * @param port          Port to listen on or connect to.
    */
-  public TCPChannelClient(ExecutorService executor, TCPChannelEvents eventListener, String ip, int port) {
+  public TCPConnectionClient(ExecutorService executor, TCPConnectionEvents eventListener, String ip, int port) {
     this.executor = executor;
     executorThreadCheck = new ThreadUtils.ThreadChecker();
     executorThreadCheck.detachThread();

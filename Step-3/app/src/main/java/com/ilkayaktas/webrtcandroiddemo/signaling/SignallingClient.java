@@ -3,27 +3,23 @@ package com.ilkayaktas.webrtcandroiddemo.signaling;
 import android.annotation.SuppressLint;
 import android.util.Log;
 
-import io.socket.client.SocketIOException;
-import io.socket.emitter.Emitter;
-import okhttp3.OkHttpClient;
+import com.google.gson.Gson;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.webrtc.IceCandidate;
 import org.webrtc.SessionDescription;
 
 import java.net.URISyntaxException;
-import java.security.KeyManagementException;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
+import java.util.concurrent.Executors;
 
 import javax.net.ssl.*;
 
 import io.socket.client.IO;
 import io.socket.client.Socket;
 
-public class SignallingClient {
+public class SignallingClient implements TCPConnectionClient.TCPConnectionEvents {
     private static String TAG = "SIGNALLING CLIENT";
     private static SignallingClient instance;
     private String roomName = null;
@@ -31,7 +27,7 @@ public class SignallingClient {
     boolean isChannelReady = false;
     public boolean isInitiator = false;
     boolean isStarted = false;
-    private SignalingInterface callback;
+    private SignallingInterface callback;
 
     //This piece of code should not go into production!!
     //This will help in cases where the node server is running in non-https server and you want to ignore the warnings
@@ -61,33 +57,19 @@ public class SignallingClient {
         return instance;
     }
 
-    public void init(SignalingInterface signalingInterface) {
-        this.callback = signalingInterface;
+    public void init(SignallingInterface signallingInterface) {
+        this.callback = signallingInterface;
+        startSocketConnection();
+    }
+
+    private void startTCPConnection(){
+        TCPConnectionClient tcpConnectionClient = new TCPConnectionClient(Executors.newFixedThreadPool(10), this, "192.168.56.101", 8000);
+    }
+
+    private void startSocketConnection(){
         try {
             //set the socket.io url here
             socket = IO.socket("http://192.168.43.67:8080");
-
-            socket.on(Socket.EVENT_CONNECT, new Emitter.Listener() {
-                @Override
-                public void call(Object... args) {
-                    Log.d(TAG, "call: EVENT_CONNECT");
-                }
-            });
-
-            socket.on(Socket.EVENT_CONNECT_TIMEOUT, new Emitter.Listener() {
-                @Override
-                public void call(Object... args) {
-                    Log.d(TAG, "call: EVENT_CONNECT_TIMEOUT");
-                }
-            });
-
-            socket.on(Socket.EVENT_CONNECT_ERROR, new Emitter.Listener() {
-                @Override
-                public void call(Object... args) {
-                    Log.d(TAG, "call: EVENT_CONNECT_ERROR"+args);
-                }
-            });
-
 
             if (!roomName.isEmpty()) {
                 emitInitStatement(roomName);
@@ -211,21 +193,53 @@ public class SignallingClient {
         socket.close();
     }
 
-    interface SignalingInterface {
-        void onRemoteHangUp(String msg);
-
-        void onOfferReceived(JSONObject data);
-
-        void onAnswerReceived(JSONObject data);
-
-        void onIceCandidateReceived(JSONObject data);
-
-        void onTryToStart();
-
-        void onCreatedRoom();
-
-        void onJoinedRoom();
-
-        void onNewPeerJoined();
+    @Override
+    public void onTCPConnected(boolean server) {
+        if (server){
+            Log.d(TAG, "onTCPConnected: i'm server");
+        } else{
+            Log.d(TAG, "onTCPConnected: i'm NOT server");
+        }
     }
+
+    @Override
+    public void onTCPMessage(String message) {
+        Log.d(TAG, "onTCPMessage: message received: " + message);
+
+        if (message.split("&")[0].equals("string")) {
+            if (message.equalsIgnoreCase("got user media")) {
+                callback.onTryToStart();
+            }
+            if (message.equalsIgnoreCase("bye")) {
+                callback.onRemoteHangUp(message);
+            }
+        } else if (message.split("&")[0].equals("json")) {
+            try {
+                JSONObject data = new Gson().fromJson(message.split("&")[1], JSONObject.class);
+                Log.d(TAG, "Json Received :: " + data.toString());
+                String type = data.getString("type");
+                if (type.equalsIgnoreCase("offer")) {
+                    callback.onOfferReceived(data);
+                } else if (type.equalsIgnoreCase("answer") && isStarted) {
+                    callback.onAnswerReceived(data);
+                } else if (type.equalsIgnoreCase("candidate") && isStarted) {
+                    callback.onIceCandidateReceived(data);
+                }
+
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    @Override
+    public void onTCPError(String description) {
+        Log.e(TAG, "onTCPError: "+description);
+    }
+
+    @Override
+    public void onTCPClose() {
+        Log.d(TAG, "onTCPClose: Connection is closed");
+    }
+
 }
