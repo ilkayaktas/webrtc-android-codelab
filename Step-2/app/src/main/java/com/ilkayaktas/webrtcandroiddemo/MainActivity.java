@@ -1,18 +1,31 @@
 package com.ilkayaktas.webrtcandroiddemo;
 
+import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Bundle;
+import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
 import android.support.v7.app.AppCompatActivity;
+import android.text.format.Formatter;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.webrtc.*;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener {
-    private static final String TAG = "MainActivity";
+public class MainActivity extends AppCompatActivity implements View.OnClickListener, TCPConnectionClient.TCPConnectionEvents {
+
+    private static final String TAG = "XXXXXXXXXX";
 
     PeerConnectionFactory peerConnectionFactory;
     MediaConstraints audioConstraints;
@@ -24,14 +37,26 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     AudioTrack localAudioTrack;
 
     SurfaceViewRenderer localVideoView;
-    SurfaceViewRenderer remoteVideoView;
+    SurfaceViewRenderer remote1VideoView;
+    SurfaceViewRenderer remote2VideoView;
     VideoRenderer localRenderer;
     VideoRenderer remoteRenderer;
 
-    PeerConnection localPeerConnection, remotePeerConnection;
+    PeerConnection localPeerConnection;
     Button start, call, hangup;
 
-    // Peers are equally privileged, equipotent participants in the application.
+    public String [] ipList = new String[]{"192.168.43.87","192.168.43.74","192.168.43.92"};
+    public List<SurfaceViewRenderer> surfaceViewRendererList = new ArrayList<>();
+
+    public Map<String, RemotePeer> clientMap = new HashMap<>();
+
+    private final TCPConnectionClient.TCPConnectionType type = TCPConnectionClient.TCPConnectionType.CLIENT;
+    public TCPConnectionClient [] tcpConnectionClient = new TCPConnectionClient[2];
+    public TCPConnectionClient tcpConnectionServer;
+
+    public boolean iAmCaller= false;
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -39,15 +64,46 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         initViews();
         initVideos();
+
+        try {
+            CompletableFuture.runAsync(() -> {
+
+                tcpConnectionServer = new TCPConnectionClient(Executors.newSingleThreadExecutor(),
+                        new ServerEventHandler(this),
+                        TCPConnectionClient.TCPConnectionType.SERVER,
+                        "0.0.0.0",
+                        5555);
+
+                Log.d("iplistsize", ipList.length + "");
+
+            }).get();
+
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
     }
 
+    public String myIP(){
+        WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+
+        String ipAddress = Formatter.formatIpAddress(wifiManager.getConnectionInfo().getIpAddress());
+
+        return ipAddress;
+
+    }
 
     private void initViews() {
         start = findViewById(R.id.start_call);
         call = findViewById(R.id.init_call);
         hangup = findViewById(R.id.end_call);
         localVideoView = findViewById(R.id.local_gl_surface_view);
-        remoteVideoView = findViewById(R.id.remote_gl_surface_view);
+        remote1VideoView = findViewById(R.id.remote1_gl_surface_view);
+        remote2VideoView = findViewById(R.id.remote2_gl_surface_view);
+
+        surfaceViewRendererList.add(remote1VideoView);
+        surfaceViewRendererList.add(remote2VideoView);
 
         start.setOnClickListener(this);
         call.setOnClickListener(this);
@@ -61,17 +117,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         // Init with EglBase to have high performance OpenGL drawings
         localVideoView.init(rootEglBase.getEglBaseContext(), null);
-        remoteVideoView.init(rootEglBase.getEglBaseContext(), null);
-
-        // Set Z Order
-        //localVideoView.setZOrderMediaOverlay(true);
-        //remoteVideoView.setZOrderMediaOverlay(true);
+        remote1VideoView.init(rootEglBase.getEglBaseContext(), null);
+        remote2VideoView.init(rootEglBase.getEglBaseContext(), null);
 
         // Set Mirror
         localVideoView.setMirror(true);
-        remoteVideoView.setMirror(true);
+        remote1VideoView.setMirror(true);
+        remote2VideoView.setMirror(true);
     }
-
 
     private VideoCapturer createVideoCapturer(CustomCameraEventsHandler customCameraEventsHandler) {
         VideoCapturer videoCapturer;
@@ -86,7 +139,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         return videoCapturer;
     }
 
-    // Create a VideoCapturer instance which uses the camera of the device
+    @Nullable
     private VideoCapturer createCameraCapturer(CameraEnumerator enumerator, CustomCameraEventsHandler customCameraEventsHandler) {
         final String[] deviceNames = enumerator.getDeviceNames();
 
@@ -120,7 +173,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         return null;
     }
 
-
     @Override
     public void onClick(View v) {
         switch (v.getId()) {
@@ -139,7 +191,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
-
     public void start() {
         start.setEnabled(false);
         call.setEnabled(true);
@@ -152,7 +203,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         //Create a new PeerConnectionFactory instance.
         //PeerConnectionFactory.Options options = new PeerConnectionFactory.Options();
         peerConnectionFactory = PeerConnectionFactory.builder().createPeerConnectionFactory();
-
 
         //Now create a VideoCapturer instance. Callback methods are there if you want to do something! Duh!
         VideoCapturer videoCapturerAndroid = createVideoCapturer(new CustomCameraEventsHandler());
@@ -174,17 +224,49 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         //we will start capturing the video from the camera width,height and fps
         videoCapturerAndroid.startCapture(1000, 1000, 30);
 
-        // SurfaceViewRenderer displays video stream on screen
+        //SurfaceViewRenderer displays video stream on screen
         //create surface renderer, init it and add the renderer to the track
         //SurfaceViewRenderer videoView = findViewById(R.id.local_gl_surface_view);
         localVideoView.setMirror(true);
 
         //create a videoRenderer based on SurfaceViewRenderer instance
         localRenderer = new VideoRenderer(localVideoView);
-        // And finally, with our VideoRenderer ready, we
-        // can add our renderer to the VideoTrack.
+        //And finally, with our VideoRenderer ready, we
+        //can add our renderer to the VideoTrack.
         localVideoTrack.addRenderer(localRenderer);
 
+        //create sdpConstraints
+        sdpConstraints = new MediaConstraints();
+        sdpConstraints.mandatory.add(new MediaConstraints.KeyValuePair("offerToReceiveAudio", "true"));
+        sdpConstraints.mandatory.add(new MediaConstraints.KeyValuePair("offerToReceiveVideo", "true"));
+
+
+        for (int j = 0, i = 0; i < ipList.length ;i++){
+            if (!myIP().equals(ipList[i])){
+                RemotePeer remotePeer = new RemotePeer(peerConnectionFactory,
+                        new ClientEventHandler(this),
+                        ipList[i], 5555,
+                        surfaceViewRendererList.get(i),
+                        this);
+
+                clientMap.put(ipList[i], remotePeer);
+            }
+        }
+
+        /*localPeerConnection = peerConnectionFactory.createPeerConnection(iceServers,
+                new CustomPeerConnectionObserver("LOCAL_PEER_CREATION") {
+            @Override
+            public void onIceCandidate(IceCandidate iceCandidate) {
+                super.onIceCandidate(iceCandidate);
+                onIceCandidateReceived(localPeerConnection, iceCandidate);
+            }
+
+            @Override
+            public void onAddStream(MediaStream mediaStream) {
+                super.onAddStream(mediaStream);
+                gotRemoteStream(mediaStream);
+            }
+        });*/
     }
 
 
@@ -193,73 +275,42 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         call.setEnabled(false);
         hangup.setEnabled(true);
 
-        //we already have video and audio tracks. Now create peerconnections
-        List<PeerConnection.IceServer> iceServers = new ArrayList<>();
+        iAmCaller = true;
 
-        //create sdpConstraints
-        sdpConstraints = new MediaConstraints();
-        sdpConstraints.mandatory.add(new MediaConstraints.KeyValuePair("offerToReceiveAudio", "true"));
-        sdpConstraints.mandatory.add(new MediaConstraints.KeyValuePair("offerToReceiveVideo", "true"));
-
-        //creating localPeer
-        localPeerConnection = peerConnectionFactory.createPeerConnection(iceServers, new CustomPeerConnectionObserver("LOCAL_PEER_CREATION") {
-            @Override
-            public void onIceCandidate(IceCandidate iceCandidate) {
-                super.onIceCandidate(iceCandidate);
-                onIceCandidateReceived(localPeerConnection, iceCandidate);
-            }
-        });
-
-        //creating remotePeer
-        remotePeerConnection = peerConnectionFactory.createPeerConnection(iceServers, new CustomPeerConnectionObserver("REMOTE_PEER_CREATION") {
-
-            @Override
-            public void onIceCandidate(IceCandidate iceCandidate) {
-                super.onIceCandidate(iceCandidate);
-                onIceCandidateReceived(remotePeerConnection, iceCandidate);
-            }
-
-            public void onAddStream(MediaStream mediaStream) {
-                super.onAddStream(mediaStream);
-                gotRemoteStream(mediaStream);
-            }
-
-            @Override
-            public void onIceGatheringChange(PeerConnection.IceGatheringState iceGatheringState) {
-                super.onIceGatheringChange(iceGatheringState);
-
-            }
-        });
-
-        //creating local mediastream
         MediaStream stream = peerConnectionFactory.createLocalMediaStream("103");
         stream.addTrack(localAudioTrack);
         stream.addTrack(localVideoTrack);
         localPeerConnection.addStream(stream);
 
         //creating Offer
-        localPeerConnection.createOffer(new CustomSdpObserver("localCreateOffer"){
+        localPeerConnection.createOffer(new CustomSdpObserver("localOffer"){
             @Override
             public void onCreateSuccess(SessionDescription sessionDescription) {
                 //we have localOffer. Set it as local desc for localpeer and remote desc for remote peer.
                 //try to create answer from the remote peer.
                 super.onCreateSuccess(sessionDescription);
-                localPeerConnection.setLocalDescription(new CustomSdpObserver("localSetLocalDesc"), sessionDescription);
+                localPeerConnection.setLocalDescription(new CustomSdpObserver("localOffer"), sessionDescription);
 
                 Log.d(TAG, "onCreateSuccess: OFFER oluştu");
-                remotePeerConnection.setRemoteDescription(new CustomSdpObserver("remoteSetRemoteDesc"), sessionDescription);
-                remotePeerConnection.createAnswer(new CustomSdpObserver("remoteCreateOffer") {
-                    @Override
-                    public void onCreateSuccess(SessionDescription sessionDescription) {
-                        //remote answer generated. Now set it as local desc for remote peer and remote desc for local peer.
-                        super.onCreateSuccess(sessionDescription);
-                        remotePeerConnection.setLocalDescription(new CustomSdpObserver("remoteSetLocalDesc"), sessionDescription);
-                        localPeerConnection.setRemoteDescription(new CustomSdpObserver("localSetRemoteDesc"), sessionDescription);
 
-                        Log.d(TAG, "onCreateSuccess: ANSWER oluştu");
+                try {
+                    JSONObject object = new JSONObject();
+                    object.put("messageType", "sdp");
+                    object.put("sdpType", "offer");
+                    object.put("payload", sessionDescription.description);
 
+                    String str = object.toString();
+
+                    //tcpConnectionServer.send(str);
+                    for (int i = 0; i < 2; i++){
+                        if (!myIP().equals(ipList[i])){
+                            tcpConnectionClient[i].send(str);
+                        }
                     }
-                },new MediaConstraints());
+
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
             }
         },sdpConstraints);
     }
@@ -267,17 +318,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     // Clears off all the PeerConnection instances
     private void hangup() {
         localPeerConnection.close();
-        remotePeerConnection.close();
+    //  remotePeerConnection.close();
         localPeerConnection = null;
-        remotePeerConnection = null;
+    //  remotePeerConnection = null;
         start.setEnabled(true);
         call.setEnabled(false);
         hangup.setEnabled(false);
         localVideoView.clearImage();
-        remoteVideoView.clearImage();
+        remote1VideoView.clearImage();
+        remote2VideoView.clearImage();
     }
 
-    private void gotRemoteStream(MediaStream stream) {
+    /*private void gotRemoteStream(MediaStream stream) {
         //we have remote video stream. add to the renderer.
         final VideoTrack videoTrack = stream.videoTracks.get(0);
         AudioTrack audioTrack = stream.audioTracks.get(0);
@@ -295,18 +347,129 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         });
 
-    }
+    }*/
 
     // Set the Ice candidates received from one peer to another peer.
-    public void onIceCandidateReceived(PeerConnection peer, IceCandidate iceCandidate) {
+   /* public void onIceCandidateReceived(PeerConnection peer, IceCandidate iceCandidate) {
+
+
         //we have received ice candidate. We can set it to the other peer.
-        if (peer == localPeerConnection) {
-            remotePeerConnection.addIceCandidate(iceCandidate);
-        } else {
-            localPeerConnection.addIceCandidate(iceCandidate);
+        Log.d(TAG, "CANDIDATE OLUŞTU.");
+
+        JSONObject object = new JSONObject();
+        try {
+            object.put("messageType", "ice");
+            object.put("label", iceCandidate.sdpMLineIndex);
+            object.put("id", iceCandidate.sdpMid);
+            object.put("candidate", iceCandidate.sdp);
+
+            //tcpConnectionClient.send(object.toString());
+
+            if (!iAmCaller){
+                tcpConnectionServer.send(object.toString());
+            } else{
+                peer.getRemoteDescription();
+            }
+            for (int i = 0; i < 3; i++){
+                if (!myIP().equals(ipList[i])){
+                    tcpConnectionClient[i].send(object.toString());
+                }
+            }
+
+        } catch (JSONException e) {
+            e.printStackTrace();
         }
-    }
+
+        localPeerConnection.addIceCandidate(iceCandidate);
+    }*/
 
 
 
+       @Override
+          public void onTCPConnected(boolean server) {
+              Log.d(TAG, "Someone Connected");
+          }
+
+          @Override
+          public void onTCPMessage(String message) {
+
+              try {
+                  JSONObject receivedMessage = new JSONObject(message);
+
+                  String type = receivedMessage.getString("messageType");
+
+                  if (type.equals("sdp")){
+
+                      Log.d(TAG, "SDP RECEIVED");
+                      String payload = receivedMessage.getString("payload");
+                      String sdpType = receivedMessage.getString("sdpType");
+
+                      if (sdpType.equals("offer")){
+
+                         SessionDescription sessionDescription = new SessionDescription(SessionDescription.Type.OFFER, payload);
+
+                          Log.d(TAG, "OFFER RECEIVED");
+
+                          localPeerConnection.setRemoteDescription(new CustomSdpObserver("remoteOffer"), sessionDescription);
+
+                          localPeerConnection.createAnswer(new CustomSdpObserver("localAnswer") {
+                              @Override
+                              public void onCreateSuccess(SessionDescription sessionDescription) {
+                                  super.onCreateSuccess(sessionDescription);
+                                  localPeerConnection.setLocalDescription(new CustomSdpObserver("localAnswer"), sessionDescription);
+
+                                  try {
+                                      JSONObject object = new JSONObject();
+                                      object.put("messageType", "sdp");
+                                      object.put("sdpType", "answer");
+                                      object.put("payload", sessionDescription.description);
+                                      String str = object.toString();
+
+                                      tcpConnectionServer.send(str);
+                                      for (int i = 0; i < 3; i++){
+                                          if (!myIP().equals(ipList[i])){
+                                              tcpConnectionClient[i].send(str);
+                                          }
+                                      }
+                                      //tcpConnectionClient.send(str);
+
+                                  } catch (JSONException e) {
+                                      e.printStackTrace();
+                                  }
+                              }
+                          },new MediaConstraints());
+                      }else if (sdpType.equals("answer")){
+                         Log.d(TAG, "ANSWER GELDİ");
+
+                          SessionDescription sessionDescription = new SessionDescription(SessionDescription.Type.ANSWER, payload);
+
+                          localPeerConnection.setRemoteDescription(new CustomSdpObserver("remoteAnswer"), sessionDescription);
+
+                          Log.d(TAG, "tamamlandı");
+                      }
+
+                  }
+                  else if (type.equals("ice")){
+
+                      Log.d(TAG, "ICE RECEIVED");
+                      String id = receivedMessage.getString("id");
+                      int label = receivedMessage.getInt("label");
+                      String candidate = receivedMessage.getString("candidate");
+
+                      localPeerConnection.addIceCandidate(new IceCandidate(id,label,candidate));
+                 }
+              } catch (JSONException e) {
+                  e.printStackTrace();
+              }
+          }
+
+          @Override
+          public void onTCPError(String description) {
+              Log.d(TAG, "onTCPError: ");
+          }
+
+          @Override
+          public void onTCPClose() {
+              Log.d(TAG, "onTCPClose: ");
+         }
 }
