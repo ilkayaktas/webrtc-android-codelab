@@ -8,11 +8,7 @@ import org.webrtc.SessionDescription;
 class CustomSdpObserver implements SdpObserver {
 
 
-    private String tag = this.getClass().getCanonicalName();
-
-    CustomSdpObserver(String logTag) {
-        this.tag = this.tag + " " + logTag;
-    }
+    private String tag = "XXXX CustomSdpObserver";
 
     @Override
     public void onCreateSuccess(SessionDescription sessionDescription) {

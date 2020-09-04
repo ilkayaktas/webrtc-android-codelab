@@ -1,5 +1,7 @@
 package com.ilkayaktas.webrtcandroiddemo;
 
+import android.os.Build;
+import android.support.annotation.RequiresApi;
 import android.util.Log;
 import org.webrtc.ThreadUtils;
 
@@ -9,10 +11,12 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.charset.Charset;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 
 public class TCPConnectionClient {
-  private static final String TAG = "TCPConnectionClient";
+  private static final String TAG = "XXXX TCPConnClient";
 
   private final ExecutorService executor;
   private final ThreadUtils.ThreadChecker executorThreadCheck;
@@ -133,82 +137,85 @@ public class TCPConnectionClient {
     /**
      * The listening thread.
      */
+    @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
     public void run() {
       Log.d(TAG, "Listening thread started...");
 
-      // Receive connection to temporary variable first, so we don't block.
-      Socket tempSocket = connect();
-      BufferedReader in;
+      while(true){
+        // Receive connection to temporary variable first, so we don't block.
+        Socket tempSocket = connect();
 
-      Log.d(TAG, "TCP connection established.");
+        try{
+          CompletableFuture.runAsync(() -> {
+            BufferedReader in;
 
-      synchronized (rawSocketLock) {
-        if (rawSocket != null) {
-          Log.e(TAG, "Socket already existed and will be replaced.");
-        }
+            Log.d(TAG, "TCP connection established.");
 
-        rawSocket = tempSocket;
+            synchronized (rawSocketLock) {
+              if (rawSocket != null) {
+                Log.e(TAG, "Socket already existed and will be replaced.");
+              }
 
-        // Connecting failed, error has already been reported, just exit.
-        if (rawSocket == null) {
-          return;
-        }
+              rawSocket = tempSocket;
 
-        try {
-          out = new PrintWriter(
-              new OutputStreamWriter(rawSocket.getOutputStream(), Charset.forName("UTF-8")), true);
-          in = new BufferedReader(
-              new InputStreamReader(rawSocket.getInputStream(), Charset.forName("UTF-8")));
-        } catch (IOException e) {
-          reportError("Failed to open IO on rawSocket: " + e.getMessage());
-          return;
-        }
-      }
+              // Connecting failed, error has already been reported, just exit.
+              if (rawSocket == null) {
+                return;
+              }
 
-      Log.v(TAG, "Execute onTCPConnected");
-      executor.execute(new Runnable() {
-        @Override
-        public void run() {
-          Log.v(TAG, "Run onTCPConnected");
-          eventListener.onTCPConnected(isServer());
-        }
-      });
-
-      while (true) {
-        final String message;
-        try {
-          message = in.readLine();
-        } catch (IOException e) {
-          synchronized (rawSocketLock) {
-            // If socket was closed, this is expected.
-            if (rawSocket == null) {
-              break;
+              try {
+                out = new PrintWriter(
+                        new OutputStreamWriter(rawSocket.getOutputStream(), Charset.forName("UTF-8")), true);
+                in = new BufferedReader(
+                        new InputStreamReader(rawSocket.getInputStream(), Charset.forName("UTF-8")));
+              } catch (IOException e) {
+                reportError("Failed to open IO on rawSocket: " + e.getMessage());
+                return;
+              }
             }
-          }
 
-          reportError("Failed to read from rawSocket: " + e.getMessage());
-          break;
+            executor.execute(new Runnable() {
+              @Override
+              public void run() {
+                eventListener.onTCPConnected(isServer());
+              }
+            });
+
+            while (true) {
+              final String message;
+              try {
+                message = in.readLine();
+              } catch (IOException e) {
+                synchronized (rawSocketLock) {
+                  // If socket was closed, this is expected.
+                  if (rawSocket == null) {
+                    break;
+                  }
+                }
+
+                reportError("Failed to read from rawSocket: " + e.getMessage());
+                break;
+              }
+
+              // No data received, rawSocket probably closed.
+              if (message == null) {
+                break;
+              }
+
+              executor.execute(new Runnable() {
+                @Override
+                public void run() {
+                  Log.v(TAG, "Receive: " + message);
+                  eventListener.onTCPMessage(message);
+                }
+              });
+            }
+          }).get();
+        } catch (InterruptedException | ExecutionException e) {
+          e.printStackTrace();
         }
-
-        // No data received, rawSocket probably closed.
-        if (message == null) {
-          break;
-        }
-
-        executor.execute(new Runnable() {
-          @Override
-          public void run() {
-            Log.v(TAG, "Receive: " + message);
-            eventListener.onTCPMessage(message);
-          }
-        });
       }
-
-      Log.d(TAG, "Receiving thread exiting...");
-
-      // Close the rawSocket if it is still open.
-      disconnect();
     }
 
     /** Closes the rawSocket if it is still open. Also fires the onTCPClose event. */
@@ -285,6 +292,7 @@ public class TCPConnectionClient {
       }
 
       try {
+        Log.d(TAG, "Server is waiting for accept connection.");
         return tempSocket.accept();
       } catch (IOException e) {
         reportError("Failed to receive connection: " + e.getMessage());

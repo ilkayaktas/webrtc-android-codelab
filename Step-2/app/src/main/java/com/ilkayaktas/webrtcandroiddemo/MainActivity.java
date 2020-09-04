@@ -23,9 +23,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener, TCPConnectionClient.TCPConnectionEvents {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
-    private static final String TAG = "XXXXXXXXXX";
+    private static final String TAG = "XXXX MainActivity";
+
+    RemotePeer remotePeer;
 
     PeerConnectionFactory peerConnectionFactory;
     MediaConstraints audioConstraints;
@@ -42,7 +44,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     VideoRenderer localRenderer;
     VideoRenderer remoteRenderer;
 
-    PeerConnection localPeerConnection;
+    //PeerConnection localPeerConnection;
     Button start, call, hangup;
 
     public String [] ipList = new String[]{"192.168.43.87","192.168.43.74","192.168.43.92"};
@@ -50,11 +52,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     public Map<String, RemotePeer> clientMap = new HashMap<>();
 
-    private final TCPConnectionClient.TCPConnectionType type = TCPConnectionClient.TCPConnectionType.CLIENT;
-    public TCPConnectionClient [] tcpConnectionClient = new TCPConnectionClient[2];
     public TCPConnectionClient tcpConnectionServer;
-
-    public boolean iAmCaller= false;
 
     @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
@@ -73,25 +71,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         TCPConnectionClient.TCPConnectionType.SERVER,
                         "0.0.0.0",
                         5555);
-
-                Log.d("iplistsize", ipList.length + "");
-
             }).get();
 
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
+        } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
         }
     }
 
     public String myIP(){
         WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
-
-        String ipAddress = Formatter.formatIpAddress(wifiManager.getConnectionInfo().getIpAddress());
-
-        return ipAddress;
-
+        return Formatter.formatIpAddress(wifiManager.getConnectionInfo().getIpAddress());
     }
 
     private void initViews() {
@@ -129,12 +118,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private VideoCapturer createVideoCapturer(CustomCameraEventsHandler customCameraEventsHandler) {
         VideoCapturer videoCapturer;
         Logging.d(TAG, "Creating capturer using camera1 API.");
-
-        /*if (Camera2Enumerator.isSupported(this)){
-            videoCapturer = createCameraCapturer(new Camera2Enumerator(this), customCameraEventsHandler);
-        } else{
-            videoCapturer = createCameraCapturer(new Camera1Enumerator(false) , customCameraEventsHandler);
-        }*/
         videoCapturer = createCameraCapturer(new Camera1Enumerator(false) /*Don't capture to text*/, customCameraEventsHandler);
         return videoCapturer;
     }
@@ -240,33 +223,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         sdpConstraints.mandatory.add(new MediaConstraints.KeyValuePair("offerToReceiveAudio", "true"));
         sdpConstraints.mandatory.add(new MediaConstraints.KeyValuePair("offerToReceiveVideo", "true"));
 
-
-        for (int j = 0, i = 0; i < ipList.length ;i++){
+        for (int j= 0, i = 0; i < ipList.length ;i++){
             if (!myIP().equals(ipList[i])){
-                RemotePeer remotePeer = new RemotePeer(peerConnectionFactory,
+                remotePeer = new RemotePeer(peerConnectionFactory,
                         new ClientEventHandler(this),
                         ipList[i], 5555,
-                        surfaceViewRendererList.get(i),
+                        surfaceViewRendererList.get(j++),
                         this);
 
                 clientMap.put(ipList[i], remotePeer);
             }
         }
-
-        /*localPeerConnection = peerConnectionFactory.createPeerConnection(iceServers,
-                new CustomPeerConnectionObserver("LOCAL_PEER_CREATION") {
-            @Override
-            public void onIceCandidate(IceCandidate iceCandidate) {
-                super.onIceCandidate(iceCandidate);
-                onIceCandidateReceived(localPeerConnection, iceCandidate);
-            }
-
-            @Override
-            public void onAddStream(MediaStream mediaStream) {
-                super.onAddStream(mediaStream);
-                gotRemoteStream(mediaStream);
-            }
-        });*/
     }
 
 
@@ -275,51 +242,53 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         call.setEnabled(false);
         hangup.setEnabled(true);
 
-        iAmCaller = true;
-
         MediaStream stream = peerConnectionFactory.createLocalMediaStream("103");
         stream.addTrack(localAudioTrack);
         stream.addTrack(localVideoTrack);
-        localPeerConnection.addStream(stream);
 
-        //creating Offer
-        localPeerConnection.createOffer(new CustomSdpObserver("localOffer"){
-            @Override
-            public void onCreateSuccess(SessionDescription sessionDescription) {
-                //we have localOffer. Set it as local desc for localpeer and remote desc for remote peer.
-                //try to create answer from the remote peer.
-                super.onCreateSuccess(sessionDescription);
-                localPeerConnection.setLocalDescription(new CustomSdpObserver("localOffer"), sessionDescription);
+        for (int i = 0; i < ipList.length ;i++){
+            if (!myIP().equals(ipList[i])){
+                RemotePeer remotePeer = clientMap.get(ipList[i]);
 
-                Log.d(TAG, "onCreateSuccess: OFFER oluştu");
+                PeerConnection peerConnection = remotePeer.getPeerConnection();
 
-                try {
-                    JSONObject object = new JSONObject();
-                    object.put("messageType", "sdp");
-                    object.put("sdpType", "offer");
-                    object.put("payload", sessionDescription.description);
+                peerConnection.addStream(stream);
 
-                    String str = object.toString();
+                peerConnection.createOffer(new CustomSdpObserver(){
+                    @Override
+                    public void onCreateSuccess(SessionDescription sessionDescription) {
+                        //we have localOffer. Set it as local desc for localpeer and remote desc for remote peer.
+                        //try to create answer from the remote peer.
+                        super.onCreateSuccess(sessionDescription);
+                        peerConnection.setLocalDescription(new CustomSdpObserver(), sessionDescription);
 
-                    //tcpConnectionServer.send(str);
-                    for (int i = 0; i < 2; i++){
-                        if (!myIP().equals(ipList[i])){
-                            tcpConnectionClient[i].send(str);
+                        Log.d(TAG, "onCreateSuccess: OFFER oluştu");
+
+                        try {
+                            JSONObject object = new JSONObject();
+                            object.put("messageType", "sdp");
+                            object.put("sdpType", "offer");
+                            object.put("ip", myIP());
+                            object.put("payload", sessionDescription.description);
+
+                            String str = object.toString();
+
+                            remotePeer.tcpConnectionClient.send(str);
+
+                        } catch (JSONException e) {
+                            e.printStackTrace();
                         }
                     }
-
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
+                },sdpConstraints);
             }
-        },sdpConstraints);
+        }
     }
 
-    // Clears off all the PeerConnection instances
+
     private void hangup() {
-        localPeerConnection.close();
+    //  localPeerConnection.close();
     //  remotePeerConnection.close();
-        localPeerConnection = null;
+    //  localPeerConnection = null;
     //  remotePeerConnection = null;
         start.setEnabled(true);
         call.setEnabled(false);
@@ -329,7 +298,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         remote2VideoView.clearImage();
     }
 
-    /*private void gotRemoteStream(MediaStream stream) {
+   /*private void gotRemoteStream(MediaStream stream) {
         //we have remote video stream. add to the renderer.
         final VideoTrack videoTrack = stream.videoTracks.get(0);
         AudioTrack audioTrack = stream.audioTracks.get(0);
@@ -349,7 +318,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     }*/
 
-    // Set the Ice candidates received from one peer to another peer.
+   // Set the Ice candidates received from one peer to another peer.
    /* public void onIceCandidateReceived(PeerConnection peer, IceCandidate iceCandidate) {
 
 
@@ -383,93 +352,93 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         localPeerConnection.addIceCandidate(iceCandidate);
     }*/
 
+   /*@Override
+        public void onTCPConnected(boolean server) {
+          Log.d(TAG, "Someone Connected");
+        }
 
+        @Override
+        public void onTCPMessage(String message) {
 
-       @Override
-          public void onTCPConnected(boolean server) {
-              Log.d(TAG, "Someone Connected");
-          }
+          try {
+              JSONObject receivedMessage = new JSONObject(message);
 
-          @Override
-          public void onTCPMessage(String message) {
+              String type = receivedMessage.getString("messageType");
+              String ip = receivedMessage.getString("ip");
 
-              try {
-                  JSONObject receivedMessage = new JSONObject(message);
+              RemotePeer remotePeer = clientMap.get(ip);
 
-                  String type = receivedMessage.getString("messageType");
+              PeerConnection peerConnection = remotePeer.getPeerConnection();
 
-                  if (type.equals("sdp")){
+              if (type.equals("sdp")){
 
-                      Log.d(TAG, "SDP RECEIVED");
-                      String payload = receivedMessage.getString("payload");
-                      String sdpType = receivedMessage.getString("sdpType");
+                  Log.d(TAG, "SDP RECEIVED");
+                  String payload = receivedMessage.getString("payload");
+                  String sdpType = receivedMessage.getString("sdpType");
 
-                      if (sdpType.equals("offer")){
+                  if (sdpType.equals("offer")){
 
-                         SessionDescription sessionDescription = new SessionDescription(SessionDescription.Type.OFFER, payload);
+                     SessionDescription sessionDescription = new SessionDescription(SessionDescription.Type.OFFER, payload);
 
-                          Log.d(TAG, "OFFER RECEIVED");
+                      Log.d(TAG, "OFFER RECEIVED");
 
-                          localPeerConnection.setRemoteDescription(new CustomSdpObserver("remoteOffer"), sessionDescription);
+                      peerConnection.setRemoteDescription(new CustomSdpObserver("remoteOffer"), sessionDescription);
 
-                          localPeerConnection.createAnswer(new CustomSdpObserver("localAnswer") {
-                              @Override
-                              public void onCreateSuccess(SessionDescription sessionDescription) {
-                                  super.onCreateSuccess(sessionDescription);
-                                  localPeerConnection.setLocalDescription(new CustomSdpObserver("localAnswer"), sessionDescription);
+                      peerConnection.createAnswer(new CustomSdpObserver("localAnswer") {
+                          @Override
+                          public void onCreateSuccess(SessionDescription sessionDescription) {
+                              super.onCreateSuccess(sessionDescription);
+                              peerConnection.setLocalDescription(new CustomSdpObserver("localAnswer"), sessionDescription);
 
-                                  try {
-                                      JSONObject object = new JSONObject();
-                                      object.put("messageType", "sdp");
-                                      object.put("sdpType", "answer");
-                                      object.put("payload", sessionDescription.description);
-                                      String str = object.toString();
+                              try {
+                                  JSONObject object = new JSONObject();
+                                  object.put("messageType", "sdp");
+                                  object.put("sdpType", "answer");
+                                  object.put("payload", sessionDescription.description);
+                                  String str = object.toString();
 
-                                      tcpConnectionServer.send(str);
-                                      for (int i = 0; i < 3; i++){
-                                          if (!myIP().equals(ipList[i])){
-                                              tcpConnectionClient[i].send(str);
-                                          }
-                                      }
-                                      //tcpConnectionClient.send(str);
+                                  //tcpConnectionServer.send(str);
+                                  //tcpConnectionClient.send(str);
 
-                                  } catch (JSONException e) {
-                                      e.printStackTrace();
-                                  }
+                                  remotePeer.tcpConnectionClient.send(str);
+
+                              } catch (JSONException e) {
+                                  e.printStackTrace();
                               }
-                          },new MediaConstraints());
-                      }else if (sdpType.equals("answer")){
-                         Log.d(TAG, "ANSWER GELDİ");
+                          }
+                      },new MediaConstraints());
+                  }else if (sdpType.equals("answer")){
+                     Log.d(TAG, "ANSWER GELDİ");
 
-                          SessionDescription sessionDescription = new SessionDescription(SessionDescription.Type.ANSWER, payload);
+                      SessionDescription sessionDescription = new SessionDescription(SessionDescription.Type.ANSWER, payload);
 
-                          localPeerConnection.setRemoteDescription(new CustomSdpObserver("remoteAnswer"), sessionDescription);
+                      peerConnection.setRemoteDescription(new CustomSdpObserver("remoteAnswer"), sessionDescription);
 
-                          Log.d(TAG, "tamamlandı");
-                      }
-
+                      Log.d(TAG, "tamamlandı");
                   }
-                  else if (type.equals("ice")){
 
-                      Log.d(TAG, "ICE RECEIVED");
-                      String id = receivedMessage.getString("id");
-                      int label = receivedMessage.getInt("label");
-                      String candidate = receivedMessage.getString("candidate");
-
-                      localPeerConnection.addIceCandidate(new IceCandidate(id,label,candidate));
-                 }
-              } catch (JSONException e) {
-                  e.printStackTrace();
               }
-          }
+              else if (type.equals("ice")){
 
-          @Override
-          public void onTCPError(String description) {
-              Log.d(TAG, "onTCPError: ");
-          }
+                  Log.d(TAG, "ICE RECEIVED");
+                  String id = receivedMessage.getString("id");
+                  int label = receivedMessage.getInt("label");
+                  String candidate = receivedMessage.getString("candidate");
 
-          @Override
-          public void onTCPClose() {
-              Log.d(TAG, "onTCPClose: ");
-         }
+                  peerConnection.addIceCandidate(new IceCandidate(id,label,candidate));
+             }
+          } catch (JSONException e) {
+              e.printStackTrace();
+          }
+        }
+
+        @Override
+        public void onTCPError(String description) {
+          Log.d(TAG, "onTCPError: ");
+        }
+
+        @Override
+        public void onTCPClose() {
+          Log.d(TAG, "onTCPClose: ");
+        }*/
 }

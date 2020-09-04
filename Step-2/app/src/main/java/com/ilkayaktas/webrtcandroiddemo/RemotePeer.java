@@ -9,34 +9,31 @@ import org.json.JSONObject;
 import org.webrtc.*;
 
 import java.util.ArrayList;
+import java.util.SplittableRandom;
 import java.util.concurrent.Executors;
 
 public class RemotePeer implements IceEvents {
-    private static final String TAG = "RemotePeer";
+    private static final String TAG = "XXXX RemotePeer";
 
     public PeerConnection peerConnection;
     public TCPConnectionClient tcpConnectionClient;
     public VideoRenderer remoteRenderer;
     public SurfaceViewRenderer remoteVideoView;
-    public Activity activity;
-
-    public RemotePeer(PeerConnection peerConnection, TCPConnectionClient tcpConnectionClient) {
-        this.peerConnection = peerConnection;
-        this.tcpConnectionClient = tcpConnectionClient;
-    }
+    public MainActivity activity;
 
     public RemotePeer(PeerConnectionFactory peerConnectionFactory,
                       TCPConnectionClient.TCPConnectionEvents tcpConnectionEvents,
                       String ip, int port,
                       SurfaceViewRenderer remoteVideoView,
-                      Activity activity) {
-
+                      MainActivity activity) {
+        
         this.peerConnection = peerConnectionFactory.createPeerConnection(new ArrayList<>(),
-                new CustomPeerConnectionObserver("LOCAL_PEER_CREATION") {
+                new CustomPeerConnectionObserver() {
                     @Override
                     public void onIceCandidate(IceCandidate iceCandidate) {
                         super.onIceCandidate(iceCandidate);
                         onIceCandidateReceived(peerConnection, iceCandidate);
+                        Log.d(TAG, "onIceCandidate: girdi");
                     }
 
                     @Override
@@ -56,12 +53,14 @@ public class RemotePeer implements IceEvents {
         this.activity = activity;
     }
 
+    public PeerConnection getPeerConnection() {
+        return peerConnection;
+    }
 
     @Override
     public void onIceCandidateReceived(PeerConnection peerConnection, IceCandidate iceCandidate) {
-
         //we have received ice candidate. We can set it to the other peer.
-        Log.d(TAG, "CANDIDATE OLUŞTU.");
+        Log.d(TAG, "CANDIDATE OLUŞTU. "+activity.myIP());
 
         JSONObject object = new JSONObject();
         try {
@@ -69,22 +68,8 @@ public class RemotePeer implements IceEvents {
             object.put("label", iceCandidate.sdpMLineIndex);
             object.put("id", iceCandidate.sdpMid);
             object.put("candidate", iceCandidate.sdp);
-
-            //tcpConnectionClient.send(object.toString());
-
-            /*if (!iAmCaller){
-                tcpConnectionServer.send(object.toString());
-            } else{
-                peer.getRemoteDescription();
-            }
-            for (int i = 0; i < 3; i++){
-                if (!myIP().equals(ipList[i])){
-                    tcpConnectionClient[i].send(object.toString());
-                }
-            }*/
-
+            object.put("ip", activity.myIP());
             tcpConnectionClient.send(object.toString());
-
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -95,6 +80,7 @@ public class RemotePeer implements IceEvents {
     @Override
     public void gotRemoteStream(MediaStream stream) {
 
+        Log.d(TAG, "Stream alındı. "+activity.myIP());
         //we have remote video stream. add to the renderer.
         final VideoTrack videoTrack = stream.videoTracks.get(0);
         AudioTrack audioTrack = stream.audioTracks.get(0);
